@@ -23,7 +23,7 @@ class Gazebo_Lab06_Env(gazebo_env.GazeboEnv):
 
     def __init__(self):
         # Launch the simulation with the given launchfile name
-        LAUNCH_FILE = '/home/fizzer/enph353_gym-gazebo/gym_gazebo/envs/enph353/src/enph353_lab06/launch/lab06_world.launch'
+        LAUNCH_FILE = '/home/rehan/enph353_gym-gazebo/gym_gazebo/envs/enph353/src/enph353_lab06/launch/lab06_world.launch'
         gazebo_env.GazeboEnv.__init__(self, LAUNCH_FILE)
         self.vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
         self.unpause = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
@@ -55,7 +55,7 @@ class Gazebo_Lab06_Env(gazebo_env.GazeboEnv):
         except CvBridgeError as e:
             print(e)
 
-        # cv2.imshow("raw", cv_image)
+        #cv2.imshow("raw", cv_image)
 
         state = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         done = False
@@ -83,29 +83,38 @@ class Gazebo_Lab06_Env(gazebo_env.GazeboEnv):
         blur = cv2.GaussianBlur(cv_image, (25, 25), 0)
         gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
 
-        retVal, binary = cv2.threshold(gray, 64, 255, cv2.THRESH_BINARY)
+        retVal, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         edges = cv2.Canny(binary, 100, 200)
+        #cv2.imshow('bin', binary)
+        #cv2.waitKey(0)
         pixel_array = np.asarray(edges)
-        edges = [0,0]
+        edge_val = [0, 0]
         count = 0
-        for i in range(0, width -1):
-            if (pixel_array.item(height- 10, i) != 0):
+        for i in range(0, width - 1):
+            if (pixel_array.item(height - 10, i) != 0):
                 if (count == 0):
-                    edges[0] = i
+                    edge_val[0] = i
+                    #print("pass 1 edge is {}" .format(i))
                 else:
-                    edges[1] = i
+                    edge_val[1] = i
                 count = 1
-
-        center = float(edges[0] + edges[1])/2
-        if (center != 0):
+        #print("edge values are {} , {}" .format(edge_val[0], edge_val[1]))
+        center = float(edge_val[0] + edge_val[1])/2
+        #print("center val is {}" .format(center))
+        edge_diff = edge_val[1] - edge_val[0]
+        print("edge diff is {}" .format(edge_diff))
+        #blob = cv2.circle(cv_image, (int(center), height - 10), 5, (0, 0, 255), -1)
+        #cv2.imshow("test", blob)
+        #cv2.waitKey(0)
+        if (70 < edge_diff < 100):
             self.timeout = 0
             n = float(width)/10
             index = math.floor(float(center)/n)
-            state[index] = 1
+            state[int(index)] = 1
         else:
-            self.timeout += 1
+            self.timeout = self.timeout + 1
 
-        if(self.timeout == 30):
+        if(self.timeout == 30 or edge_diff > 300):
             done = True
 
         return state, done
@@ -130,10 +139,10 @@ class Gazebo_Lab06_Env(gazebo_env.GazeboEnv):
             vel_cmd.linear.x = 0.4
             vel_cmd.angular.z = 0.0
         elif action == 1:  # LEFT
-            vel_cmd.linear.x = 0.0
+            vel_cmd.linear.x = 0.005
             vel_cmd.angular.z = 0.5
         elif action == 2:  # RIGHT
-            vel_cmd.linear.x = 0.0
+            vel_cmd.linear.x = 0.005
             vel_cmd.angular.z = -0.5
 
         self.vel_pub.publish(vel_cmd)
@@ -158,13 +167,13 @@ class Gazebo_Lab06_Env(gazebo_env.GazeboEnv):
         # Set the rewards for your action
         if not done:
             if action == 0:  # FORWARD
-                reward = 4
+                reward = 12
             elif action == 1:  # LEFT
                 reward = 2
             else:
                 reward = 2  # RIGHT
         else:
-            reward = -200
+            reward = -1000
 
         return state, reward, done, {}
 
