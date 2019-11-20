@@ -32,8 +32,8 @@ def stop(publisher, msg):
 def hsv_filter(or_img, color):
     hsv = cv2.cvtColor(or_img, cv2.COLOR_BGR2HSV)
     limits = hsv_color_dict[color]
-    lower = limits[0]
-    upper = limits[1]
+    lower = np.asarray(limits[0])
+    upper = np.asarray(limits[1])
     mask = cv2.inRange(hsv, lower, upper)
     return mask
 
@@ -51,6 +51,26 @@ def callback(data):
     # cv2.imshow('blob', cv_image)
     cv2.waitKey(3)
 
+#returns an array of locations of all edges
+#first index is the rightmost edge
+def edge_detector():
+    dim = cv_image.shape
+    height, width = dim[0], dim [1]
+    hsv_img = hsv_filter(cv_image, "white")
+    retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
+    edges = cv2.Canny(binary, 100, 200)
+    pixel_array = np.asarray(edges)
+    i = width - 1
+    edge_vals = []
+    while (i >= 0):
+        if(pixel_array.item(height-10, i) != 0):
+            edge_vals.append(i)
+
+    cv2.circle(cv_image, (edge_val[0], height-3), 15, (255, 0, 0), -1)
+    cv2.circle(cv_image, (edge_val[1], height-3), 15, (0, 0, 255), -1)
+    cv2.imshow('blob', cv_image)
+    cv2.waitKey(3)
+
 sub = rospy.Subscriber('/R1/pi_camera/image_raw', Image, callback, queue_size = 10)
 pub = rospy.Publisher('/R1/cmd_vel', Twist, queue_size = 10)
 rospy.init_node('navigation', anonymous= True)
@@ -65,13 +85,19 @@ rate = rospy.Rate(10)
 
 speed = 3
 turn_rate = 1
-forward_time = 3
-turn_time = 3
-start_time = time.time() 
+forward_time = 1.25
+turn_time = 1.125
+left_intersection = False
 while not rospy.is_shutdown():
-    if(time.time() < start_time + forward_time):
+    if(left_intersection == False):
         forward(pub, vel_msg, speed)
-    elif(time.time() < start_time + forward_time + turn_time):
+        print("forward")
+        rospy.sleep(rospy.Duration(forward_time))
         turn(pub, vel_msg, turn_rate)
-    else: 
+        print("turn")
+        rospy.sleep((rospy.Duration(turn_time)))
+        left_intersection = True
+    else:
         stop(pub, vel_msg)
+        print("stop")
+        edge_detector()
