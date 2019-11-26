@@ -30,6 +30,8 @@ class NavigationController():
         self.img_height, self.img_width = None, None
         self.edge_height = None
         self.edge_val = [0]
+        self.pos = 0
+        self.white_val = []
         #self.last_edge = 0
 
     def img_callback(self, data):
@@ -74,6 +76,23 @@ class NavigationController():
         mask = cv2.inRange(hsv, lower, upper)
         return mask
 
+    def pos_finder(self):
+        self.white_val = []
+        start = 0
+        hsv_img = self.hsv_filter("white")
+        retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
+        pixel_arr = np.asarray(binary)
+        cv2.imshow("binary", binary)
+        cv2.waitKey(0)
+        pos = 0
+        for i in range(0, self.img_width -1):
+            if(pixel_arr.item(self.edge_height, i) != 0):
+                self.white_val.append(i)
+        print("white_val: {}" .format(self.white_val))
+        pos = max(self.white_val)  
+        cv2.circle(self.cv_image, (pos, self.edge_height), 5, (0,0,255), -1)
+        return pos
+
     def edge_detector(self):
         hsv_img = self.hsv_filter("white")
         retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
@@ -90,11 +109,12 @@ class NavigationController():
 
     def path_follower(self):
         self.speed = 1.0
-        tolerance = 0
+        tolerance = 10
         dead_zone = 1000
         center = float(self.img_width)/2.0
         quart = float(self.img_width)/4.0
-        position = max(self.edge_val)
+        position = self.pos_finder()
+        print(position)
         self.vel_msg.linear.x = self.speed
         self.vel_msg.angular.z = 0
 
@@ -131,17 +151,11 @@ class NavigationController():
             cv2.circle(self.cv_image, (i,
                                        self.edge_height), 5,
                                       (255, 0, 0), -1)
-        #cv2.imshow('blob', self.cv_image)
-        #cv2.waitKey(3)
+        cv2.imshow('blob', binary)
+        cv2.waitKey(3)
         #print("image width is {}" .format(self.img_width))
         #print("Right edge is {}" .format(right_index))
         #print("number of edges is {}" .format(len(self.edge_val)))
-
-
-    def color_recognition(self):
-        rgb_color_dict = {
-                "red": ()
-        }
 
 
 rospy.init_node('navigation', anonymous=True)
@@ -167,29 +181,10 @@ while not rospy.is_shutdown():
         # last_edge = max(robot.edge_val)
         # print("last edge is: {}" .format(last_edge))
         left_intersection = True
-    else:
-        robot.edge_detector()
-        #print("Edge_array is: {}" .format(robot.edge_val))
-        #robot.path_follower()
-        # next_edge = max(robot.edge_val)
-        # print("next_edge is: {}" .format(next_edge))
-        # if (next_edge - last_edge > 100):
-        #     temp = []
-        #     for i in robot.edge_val:
-        #         if(i <= last_edge):
-        #             temp.append(i)
-        #     robot.edge_val = temp
-        #     # truncated += 1
-        #     #print("number of edges cut: {}" .format(truncated))
-        #     print("truncated edge_val: {}" .format(robot.edge_val))
-        # else:
-        #     last_edge = next_edge
-        #     # last_updated += 1
-        #     #print("num of last values updated: {}" .format(last_updated))
-        #     print("last edge_val: {}" .format(robot.edge_val))
         robot.stop()
         print("stop")
+    else:
+        
+        # print(robot.pos_finder())
         robot.img_test()
         robot.path_follower()
-        # robot.stop()
-        # rospy.sleep(rospy.Duration(test_time))
