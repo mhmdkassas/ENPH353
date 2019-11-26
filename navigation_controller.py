@@ -77,20 +77,18 @@ class NavigationController():
         return mask
 
     def pos_finder(self):
-        self.white_val = []
+        self.white_val = [0]
         start = 0
         hsv_img = self.hsv_filter("white")
         retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
         pixel_arr = np.asarray(binary)
-        cv2.imshow("binary", binary)
-        cv2.waitKey(0)
         pos = 0
         for i in range(0, self.img_width -1):
             if(pixel_arr.item(self.edge_height, i) != 0):
                 self.white_val.append(i)
-        print("white_val: {}" .format(self.white_val))
         pos = max(self.white_val)  
-        cv2.circle(self.cv_image, (pos, self.edge_height), 5, (0,0,255), -1)
+        # cv2.circle(self.cv_image, (pos, self.edge_height), 5, (0,0,255), -1)
+        cv2.imshow("a", self.cv_image)
         return pos
 
     def edge_detector(self):
@@ -98,51 +96,40 @@ class NavigationController():
         retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
         edges = cv2.Canny(binary, 100, 200)
         self.edge_val = [0]
-        # cv2.imshow('testy', edges)
-        # cv2.waitKey(0)
         pixel_array = np.asarray(edges)
         for i in range(0, self.img_width - 1):
             if(pixel_array.item(self.edge_height, i) != 0):
                 self.edge_val.append(i)
-        num_edges = len(self.edge_val)
-        #print("number edges: {}" .format(num_edges))
+        print("num of edges {}" .format(len(self.edge_val)))
 
     def path_follower(self):
         self.speed = 1.0
         tolerance = 10
         dead_zone = 1000
         center = float(self.img_width)/2.0
-        quart = float(self.img_width)/4.0
         position = self.pos_finder()
-        print(position)
         self.vel_msg.linear.x = self.speed
         self.vel_msg.angular.z = 0
 
         if(center > position):
-            print("EDGE")
             self.vel_msg.linear.x = 0.0
             self.vel_msg.angular.z = 1
 
         if(center < position - tolerance):
-            print("L")
             self.vel_msg.linear.x = 0.5
             self.vel_msg.angular.z = -4
 
         if (center <= position and center >= position - tolerance):
-            print("F")
             self.vel_msg.linear.x = self.speed
             self.vel_msg.angular.z = 0
 
         if(1200 > position > dead_zone):
-            print("yikes")
             self.vel_msg.linear.x = 0
             self.vel_msg.angular.z = -0.3
 
         self.vel_pub.publish(self.vel_msg)
 
     def img_test(self):
-        # edge_sum = self.edge_val[1] + self.edge_val[0]
-        # edge_diff = self.edge_val[1] - self.edge_val[0]
         hsv_img = self.hsv_filter("white")
         retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
         edges = cv2.Canny(binary, 100, 200)
@@ -151,12 +138,7 @@ class NavigationController():
             cv2.circle(self.cv_image, (i,
                                        self.edge_height), 5,
                                       (255, 0, 0), -1)
-        cv2.imshow('blob', binary)
-        cv2.waitKey(3)
-        #print("image width is {}" .format(self.img_width))
-        #print("Right edge is {}" .format(right_index))
-        #print("number of edges is {}" .format(len(self.edge_val)))
-
+        cv2.imshow("a", self.cv_image)
 
 rospy.init_node('navigation', anonymous=True)
 rate = rospy.Rate(10)
@@ -166,25 +148,23 @@ turn_time = 1.125
 test_time = 3.0
 left_intersection = False
 robot.stop()
-#truncated = 0
-#last_updated = 0
 while not rospy.is_shutdown():
+    # robot.pos_finder()
     if(left_intersection is False):
         rospy.sleep(rospy.Duration(test_time))
         robot.forward()
-        print("forward")
         rospy.sleep(rospy.Duration(forward_time))
         robot.turn()
-        print("turn")
         rospy.sleep((rospy.Duration(turn_time)))
-        #robot.edge_detector()
-        # last_edge = max(robot.edge_val)
-        # print("last edge is: {}" .format(last_edge))
         left_intersection = True
         robot.stop()
-        print("stop")
     else:
-        
-        # print(robot.pos_finder())
-        robot.img_test()
+        robot.edge_detector()
+        if(len(robot.edge_val) > 18):
+            robot.stop()
+            rospy.sleep(rospy.Duration(2))
+            robot.forward()
+            rospy.sleep(rospy.Duration(2))
+
         robot.path_follower()
+    
