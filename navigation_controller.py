@@ -5,6 +5,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
+import random
 # import time
 
 # bridge = CvBridge()
@@ -34,6 +35,9 @@ class NavigationController():
         self.white_val = []
         self.ped = False
         self.flag = True
+        self.cropped_edge = []
+        self.p_counter = 1
+        self.seen_car = False
         #self.last_edge = 0
 
     def img_callback(self, data):
@@ -125,8 +129,8 @@ class NavigationController():
                 self.white_val.append(i)
         pos = max(self.white_val)
         cv2.circle(self.cv_image, (pos, self.edge_height), 5, (0,0,255), -1)
-        cv2.imshow("real",self.cv_image)
-        cv2.waitKey(3)
+        # cv2.imshow("real",self.cv_image)
+        # cv2.waitKey(3)
         return pos
 
     def edge_detector(self):
@@ -147,7 +151,7 @@ class NavigationController():
         mask = cv2.inRange(hsv, lower, upper)
         # cv2.imshow("mask", mask)
         retVal, binary = cv2.threshold(self.cv_image, 64, 250, cv2.THRESH_BINARY)
-        cv2.imshow("real", self.cv_image)
+        # cv2.imshow("real", self.cv_image)
         # lower_bgr = np.uint8([[[41, 20, 14]]])
         # upper_bgr = np.uint8([[[158, 134, 107]]])
         l = np.asarray([104, 82, 41])
@@ -170,9 +174,9 @@ class NavigationController():
         if(count == 0):
             self.ped = False
         print(self.ped)
-        cv2.imshow("b", cropped_img)
-        cv2.imshow("r", cropped_img_1)
-        cv2.waitKey(3)
+        # cv2.imshow("b", cropped_img)
+        # cv2.imshow("r", cropped_img_1)
+        # cv2.waitKey(3)
 
     def path_follower(self):
         # self.ped_finder()
@@ -207,22 +211,47 @@ class NavigationController():
         self.vel_pub.publish(self.vel_msg)
 
     def img_test(self):
-        hsv_img = self.hsv_filter("white")
-        retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
+        # seen_car = False
+        left_x_offset = -200
+        bottom_y_offset = 175
+        right_x_offset = -250
+        top_y_offset = 325
+        top_left = (int(float(self.img_height) / 2.0) + left_x_offset, 0 + top_y_offset)
+        bottom_left = (int(float(self.img_height) / 2.0) + left_x_offset, int(float(self.img_width) / 4.0) + bottom_y_offset)
+        top_right = (int(float(self.img_height) * 0.75) + right_x_offset, 0 + top_y_offset)
+        bottom_right = (int(float(self.img_height) * 0.75) + right_x_offset, int(float(self.img_width) / 4.0) + bottom_y_offset)
+        hsv_img = self.hsv_filter("blue")
+        retVal, binary = cv2.threshold(hsv_img, 100, 255, cv2.THRESH_BINARY)
         edges = cv2.Canny(binary, 100, 200)
-        # right_index = max(self.edge_val)
-        # for i in self.edge_val:
-        #     cv2.circle(self.cv_image, (i,
-        #                                self.edge_height), 5,
-        #                               (255, 0, 0), -1)
-        # cv2.imshow("a", binary)
-        # cv2.imshow("b", self.cv_image)
-        # cv2.waitKey(3)
+        cropped = edges[top_left[1]:bottom_left[1], top_left[0]:top_right[1]]
+        dims = cropped.shape
+        h, w = dims[0], dims[1]
+        pixel_array = np.asarray(cropped)
+        self.cropped_edge = []
+        for i in range(0, w - 1):
+            for z in range(0, h -1):
+                if(pixel_array.item(z, i) != 0):
+                    self.cropped_edge.append(i)
+        print("cropped edges: {}" .format(len(self.cropped_edge)))
+        if (len(self.cropped_edge) > 600):
+            self.seen_car = True
+            cv_crop = self.cv_image[top_left[1]:bottom_left[1], top_left[0]:top_right[1]]
+            cv2.imwrite('cropped_car{}_{}.png' .format(self.p_counter, len(self.cropped_edge)), cv_crop)
+            print("cropped saved!")
+        # tl = cv2.circle(self.cv_image, top_left, 15, (0, 0, 255), -1) #red
+        # tr = cv2.circle(tl, top_right, 15, (255, 0, 255), -1) #purple
+        # bl = cv2.circle(tr, bottom_left, 15, (0, 255, 0), -1) #green
+        # br = cv2.circle(bl, bottom_right, 15, (255, 255, 0), -1) #teal
+        if (len(self.cropped_edge) < 100 and self.seen_car is True):
+            self.seen_car = False
+            self.p_counter += 1
+        cv2.imshow("b", cropped)
+        cv2.waitKey(3)
 
 rospy.init_node('navigation', anonymous=True)
 rate = rospy.Rate(10)
 robot = NavigationController()
-forward_time = 1.25
+forward_time = 1.75
 turn_time = 1.125
 test_time = 3.0
 left_intersection = False
@@ -258,4 +287,9 @@ while not rospy.is_shutdown():
                 robot.flag = False
         else:
             robot.flag = True
+            # if (len(robot.edge_val) == 5):
+            #     robot.stop()
+            #     print("edge=5")
+            #     rospy.sleep((rospy.Duration(1)))
             robot.path_follower()
+            robot.img_test()
