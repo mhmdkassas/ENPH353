@@ -32,6 +32,7 @@ class NavigationController():
         self.edge_val = [0]
         self.pos = 0
         self.white_val = []
+        self.ped = False
         #self.last_edge = 0
 
     def img_callback(self, data):
@@ -43,7 +44,37 @@ class NavigationController():
                 self.edge_height = self.img_height - 100
             except CvBridgeError as e:
                 print(e)
-
+        # cv2.imshow("a", self.cv_image)
+        hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
+        lower = np.asarray([110, 50, 50])
+        upper = np.asarray([130, 255, 255])
+        mask = cv2.inRange(hsv, lower, upper)
+        # cv2.imshow("mask", mask)
+        retVal, binary = cv2.threshold(self.cv_image, 64, 250, cv2.THRESH_BINARY)
+        cv2.imshow("real", self.cv_image)
+        # lower_bgr = np.uint8([[[41, 20, 14]]])
+        # upper_bgr = np.uint8([[[158, 134, 107]]])
+        l = np.asarray([104, 82, 41])
+        u = np.asarray([113, 168, 158])
+        hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, l, u)
+        gb = cv2.GaussianBlur(mask, (5,5), cv2.BORDER_DEFAULT)
+        r, b = cv2.threshold(gb, 64, 240, cv2.THRESH_BINARY)
+        center = int(float(b.shape[1])/2.0)
+        cropped_img = b[:, center: ]
+        dims = cropped_img.shape
+        h, w = dims[0], dims[1]
+        crp = np.asarray(cropped_img)
+        count = 0
+        for i in range(0, h):
+            for z in range(0, w):
+                if(crp.item(i, z) != 0):
+                    self.ped = True
+                    count = 1
+        if(count == 0):
+            self.ped = False
+        cv2.imshow("b", b)
+        cv2.waitKey(3)
     def forward(self):
         # msg = Twist()
         self.vel_msg.linear.x = self.speed
@@ -61,6 +92,9 @@ class NavigationController():
         self.vel_msg.linear.x = 0
         self.vel_msg.angular.z = 0
         self.vel_pub.publish(self.vel_msg)
+        # retVal, binary = cv2.threshold(self.cv_image, 64, 246, cv2.THRESH_BINARY)
+        # cv2.imshow("a", self.cv_image)
+        # cv2.waitKey(3)
 
     def hsv_filter(self, color):
         hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
@@ -88,7 +122,6 @@ class NavigationController():
                 self.white_val.append(i)
         pos = max(self.white_val)  
         # cv2.circle(self.cv_image, (pos, self.edge_height), 5, (0,0,255), -1)
-        cv2.imshow("a", self.cv_image)
         return pos
 
     def edge_detector(self):
@@ -129,16 +162,40 @@ class NavigationController():
 
         self.vel_pub.publish(self.vel_msg)
 
+    # def ped_finder(self):
+    #     center = int(float(self.img_width)/2.0)
+    #     hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
+    #     lower = np.asarray([110, 50, 50])
+    #     upper = np.asarray([130, 255, 255])
+    #     mask = cv2.inRange(hsv, lower, upper)
+    #     # cv2.imshow("mask", mask)
+    #     retVal, binary = cv2.threshold(self.cv_image, 64, 250, cv2.THRESH_BINARY)
+    #     cv2.imshow("real", self.cv_image)
+    #     # lower_bgr = np.uint8([[[41, 20, 14]]])
+    #     # upper_bgr = np.uint8([[[158, 134, 107]]])
+    #     l = np.asarray([104, 82, 41])
+    #     u = np.asarray([113, 168, 158])
+    #     hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
+    #     mask = cv2.inRange(hsv, l, u)
+    #     gb = cv2.GaussianBlur(mask, (5,5), cv2.BORDER_DEFAULT)
+    #     r, b = cv2.threshold(gb, 64, 240, cv2.THRESH_BINARY)
+    #     cropped_img = b[:, center: ]
+    #     dims = cropped_img.shape
+    #     h, w = dims[0], dims[1]
+        
+
     def img_test(self):
         hsv_img = self.hsv_filter("white")
         retVal, binary = cv2.threshold(hsv_img, 64, 255, cv2.THRESH_BINARY)
         edges = cv2.Canny(binary, 100, 200)
-        right_index = max(self.edge_val)
-        for i in self.edge_val:
-            cv2.circle(self.cv_image, (i,
-                                       self.edge_height), 5,
-                                      (255, 0, 0), -1)
-        cv2.imshow("a", self.cv_image)
+        # right_index = max(self.edge_val)
+        # for i in self.edge_val:
+        #     cv2.circle(self.cv_image, (i,
+        #                                self.edge_height), 5,
+        #                               (255, 0, 0), -1)
+        cv2.imshow("a", binary)
+        cv2.imshow("b", self.cv_image)
+        cv2.waitKey(3)
 
 rospy.init_node('navigation', anonymous=True)
 rate = rospy.Rate(10)
@@ -148,7 +205,12 @@ turn_time = 1.125
 test_time = 3.0
 left_intersection = False
 robot.stop()
+count = 0
 while not rospy.is_shutdown():
+    # if(count % 2 == 0):
+    #     count = 0
+    # else:
+    #     count+=1
     # robot.pos_finder()
     if(left_intersection is False):
         rospy.sleep(rospy.Duration(test_time))
@@ -159,12 +221,10 @@ while not rospy.is_shutdown():
         left_intersection = True
         robot.stop()
     else:
+        robot.img_test()
         robot.edge_detector()
-        if(len(robot.edge_val) > 18):
+        if(len(robot.edge_val) > 18 and robot.ped):
             robot.stop()
-            rospy.sleep(rospy.Duration(2))
-            robot.forward()
-            rospy.sleep(rospy.Duration(2))
 
         robot.path_follower()
     
