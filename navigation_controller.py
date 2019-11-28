@@ -6,8 +6,9 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 import random
-# import time
-
+import os
+from std_msgs.msg import String
+path = os.path.dirname(os.path.realpath(__file__)) + "/"
 # bridge = CvBridge()
 
 
@@ -18,6 +19,8 @@ class NavigationController():
                                        queue_size=10)
         self.img_sub = rospy.Subscriber('/R1/pi_camera/image_raw', Image,
                                         self.img_callback, queue_size=10)
+        self.lic_pub = rospy.Publisher('/license_plate', String,
+                                       queue_size=10)
         self.bridge = CvBridge()
         self.cv_image = Image
         self.speed = 3
@@ -38,6 +41,8 @@ class NavigationController():
         self.cropped_edge = []
         self.p_counter = 1
         self.seen_car = False
+        self.team_ID = 'MOHAN'
+        self.team_pw = 'password'
         #self.last_edge = 0
 
     def img_callback(self, data):
@@ -236,7 +241,8 @@ class NavigationController():
         if (len(self.cropped_edge) > 600):
             self.seen_car = True
             cv_crop = self.cv_image[top_left[1]:bottom_left[1], top_left[0]:top_right[1]]
-            cv2.imwrite('cropped_car{}_{}.png' .format(self.p_counter, len(self.cropped_edge)), cv_crop)
+            cv2.imwrite(os.path.join(path + "sim_photos/OPQR/",
+                        'cropped_car{}_{}.png' .format(self.p_counter, len(self.cropped_edge))), cv_crop)
             print("cropped saved!")
         # tl = cv2.circle(self.cv_image, top_left, 15, (0, 0, 255), -1) #red
         # tr = cv2.circle(tl, top_right, 15, (255, 0, 255), -1) #purple
@@ -244,9 +250,11 @@ class NavigationController():
         # br = cv2.circle(bl, bottom_right, 15, (255, 255, 0), -1) #teal
         if (len(self.cropped_edge) < 100 and self.seen_car is True):
             self.seen_car = False
+            str_pub = self.team_ID + "," + self.team_pw + "," + "P" + str(self.p_counter) + ","+"AA00"
+            self.lic_pub.publish(str_pub)
             self.p_counter += 1
-        cv2.imshow("b", cropped)
-        cv2.waitKey(3)
+        # cv2.imshow("b", cropped)
+        # cv2.waitKey(3)
 
 rospy.init_node('navigation', anonymous=True)
 rate = rospy.Rate(10)
