@@ -300,4 +300,4 @@ while not rospy.is_shutdown():
             #     print("edge=5")
             #     rospy.sleep((rospy.Duration(1)))
             robot.path_follower()
-            robot.img_test()
+            # robot.img_test()
